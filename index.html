@@ -313,6 +313,8 @@ h1,h2,h3,h4{font-family:'Syne',sans-serif;}
       <div class="nav-divider"></div>
       <div class="nav-item" onclick="showPage('quotidien')" data-page="quotidien"><span class="icon">📝</span>Dépenses Quotidiennes</div>
       <div class="nav-item" onclick="showPage('synthese')" data-page="synthese"><span class="icon">📊</span>Synthèse 7 Mois</div>
+      <div class="nav-divider"></div>
+      <div class="nav-item" onclick="showPage('parametres')" data-page="parametres"><span class="icon">⚙️</span>Paramètres</div>
     </nav>
     <div class="sidebar-bottom">
       <div class="mois-label"><span class="sync-dot" id="sync-dot"></span>Mois actif</div>
@@ -442,6 +444,15 @@ h1,h2,h3,h4{font-family:'Syne',sans-serif;}
       <div class="synth-grid" id="synth-kpis"></div>
       <div class="card"><div class="section-title">Détail mensuel</div><div class="scroll-table"><table class="synth-table" id="synth-table"></table></div></div>
     </div>
+
+    <!-- PARAMETRES -->
+    <div class="page" id="page-parametres">
+      <div class="page-header">
+        <div><div class="page-title">⚙️ Paramètres</div><div class="page-subtitle">Personnalise ta répartition financière</div></div>
+      </div>
+      <div id="parametres-content"></div>
+    </div>
+
   </main>
 </div>
 </div>
@@ -638,6 +649,7 @@ async function loadUserData(uid){
     document.getElementById('dq-date').value=today;
     document.getElementById('m-paie-date').value=today;
     showScreen('app');
+    updateNavLabels();
     renderPage('dashboard');
   } catch(e){ showErr('Erreur de chargement : '+e.message); showScreen('auth'); }
 }
@@ -671,12 +683,12 @@ function totalRevenu(mi){ return (state.mois[mi].revenus||[]).reduce((s,r)=>s+r.
 
 function getReport(mi,plan){
   if(mi===0) return 0;
-  const prevBudget = totalRevenu(mi-1)*PC[plan].pct + getReport(mi-1,plan);
+  const prevBudget = totalRevenu(mi-1)*getPct(plan) + getReport(mi-1,plan);
   const prevDep    = planDep(mi-1,plan);
   return Math.max(0, prevBudget - prevDep);
 }
 
-function budgetPlan(mi,plan){ return totalRevenu(mi)*PC[plan].pct + getReport(mi,plan); }
+function budgetPlan(mi,plan){ return totalRevenu(mi)*getPct(plan) + getReport(mi,plan); }
 
 function planDep(mi,plan){
   const m=state.mois[mi];
@@ -708,6 +720,7 @@ function renderPage(p){
   else if(p==='dette')   renderDette();
   else if(p==='quotidien') renderDQ();
   else if(p==='synthese') renderSynthese();
+  else if(p==='parametres') renderParametres();
 }
 
 // ══════════════════════════════════════════════════
@@ -723,6 +736,7 @@ function renderDash(){
     return `<div style="background:${PC[k].light};border:1px solid ${PC[k].color}44;border-radius:10px;padding:7px 12px;min-width:110px;">
       <div style="font-size:11px;color:var(--muted);">${PC[k].icon} ${PC[k].label.replace('Plan ','')}</div>
       <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:15px;color:${PC[k].color};">${fmt(b)}</div>
+      <div style="font-size:11px;color:var(--muted);">${Math.round(getPct(k)*100)}%</div>
     </div>`;
   }).join('');
 
@@ -1057,6 +1071,149 @@ function renderSynthese(){
       </tr>`;
     }).join('')}
   </tbody>`;
+}
+
+// ══════════════════════════════════════════════════
+// PARAMETRES
+// ══════════════════════════════════════════════════
+const DEFAULT_PCTS = {don:0.10, epargne:0.10, invest:0.05, dette:0.10, conso:0.65};
+
+function getPct(k){
+  if(state && state.parametres && state.parametres[k] !== undefined)
+    return state.parametres[k];
+  return DEFAULT_PCTS[k];
+}
+
+function renderParametres(){
+  const el = document.getElementById('parametres-content');
+  if(!el) return;
+  const pcts = {};
+  PLAN_KEYS.forEach(k => pcts[k] = Math.round(getPct(k)*100));
+  const total = PLAN_KEYS.reduce((s,k)=>s+pcts[k],0);
+  const ok = total === 100;
+
+  el.innerHTML = `
+  <div class="card mb-4" style="border-color:var(--gold)44;">
+    <div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:700;margin-bottom:6px;">Répartition du revenu</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:20px;">Définis le pourcentage de ton revenu alloué à chaque plan. Le total doit être égal à <strong style="color:var(--gold);">100%</strong>.</div>
+    <div style="display:flex;flex-direction:column;gap:16px;" id="pct-sliders">
+      ${PLAN_KEYS.map(k => `
+      <div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+          <div style="font-size:14px;font-weight:600;">${PC[k].icon} ${PC[k].label}</div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <input type="number" id="pct-input-${k}" min="0" max="100" value="${pcts[k]}"
+              style="background:var(--dark3);border:1px solid var(--border);color:var(--text);padding:6px 10px;border-radius:8px;font-size:14px;font-weight:700;width:70px;text-align:center;outline:none;font-family:'DM Sans',sans-serif;"
+              oninput="syncSlider('${k}',this.value)" />
+            <span style="color:var(--muted);font-size:13px;">%</span>
+          </div>
+        </div>
+        <input type="range" id="pct-range-${k}" min="0" max="100" value="${pcts[k]}"
+          style="width:100%;accent-color:${PC[k].color};"
+          oninput="syncInput('${k}',this.value)" />
+        <div style="height:6px;background:var(--dark3);border-radius:99px;margin-top:6px;overflow:hidden;">
+          <div id="pct-bar-${k}" style="height:100%;width:${pcts[k]}%;background:${PC[k].color};border-radius:99px;transition:.3s;"></div>
+        </div>
+      </div>`).join('')}
+    </div>
+
+    <div style="margin-top:20px;padding:14px 18px;border-radius:12px;display:flex;align-items:center;justify-content:space-between;background:${ok?'#0F2A1A':'#2A0A0A'};border:1px solid ${ok?'var(--ep)':'var(--dette)'};" id="pct-total-bar">
+      <div>
+        <div style="font-size:12px;color:var(--muted);">Total alloué</div>
+        <div style="font-family:'Syne',sans-serif;font-size:22px;font-weight:800;color:${ok?'var(--green)':'var(--red)'};" id="pct-total">${total}%</div>
+      </div>
+      <div id="pct-status" style="font-size:13px;font-weight:600;color:${ok?'var(--green)':'var(--red)'};">${ok?'✅ Parfait !':'⚠️ Doit être 100%'}</div>
+    </div>
+
+    <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap;">
+      <button class="btn-gold-sm" onclick="saveParametres()" id="btn-save-pct">💾 Enregistrer</button>
+      <button class="btn-outline-sm" onclick="resetParametres()">↺ Réinitialiser par défaut</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div style="font-family:'Syne',sans-serif;font-size:15px;font-weight:700;margin-bottom:14px;">Aperçu pour un revenu de 1 000 000 FCFA</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;">
+      ${PLAN_KEYS.map(k=>`
+      <div style="background:${PC[k].light};border:1px solid ${PC[k].color}44;border-radius:12px;padding:14px;text-align:center;">
+        <div style="font-size:13px;color:var(--muted);">${PC[k].icon} ${PC[k].label.replace('Plan ','')}</div>
+        <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:800;color:${PC[k].color};margin-top:4px;" id="preview-${k}">${fmt(getPct(k)*1000000)} FCFA</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:2px;">${Math.round(getPct(k)*100)}%</div>
+      </div>`).join('')}
+    </div>
+  </div>`;
+}
+
+function syncSlider(k, val){
+  const v = parseInt(val)||0;
+  const r = document.getElementById('pct-range-'+k);
+  if(r) r.value = v;
+  updatePctUI(k, v);
+}
+function syncInput(k, val){
+  const v = parseInt(val)||0;
+  const inp = document.getElementById('pct-input-'+k);
+  if(inp) inp.value = v;
+  updatePctUI(k, v);
+}
+function updatePctUI(k, v){
+  const bar = document.getElementById('pct-bar-'+k);
+  if(bar) bar.style.width = Math.min(100,v)+'%';
+  // update total
+  let total = 0;
+  PLAN_KEYS.forEach(key=>{
+    const inp = document.getElementById('pct-input-'+key);
+    total += inp ? (parseInt(inp.value)||0) : Math.round(getPct(key)*100);
+  });
+  const ok = total===100;
+  const tb = document.getElementById('pct-total-bar');
+  const ts = document.getElementById('pct-total');
+  const st = document.getElementById('pct-status');
+  if(ts) ts.textContent = total+'%';
+  if(ts) ts.style.color = ok?'var(--green)':'var(--red)';
+  if(st){ st.textContent = ok?'✅ Parfait !':'⚠️ Doit être 100%'; st.style.color = ok?'var(--green)':'var(--red)';}
+  if(tb){ tb.style.background = ok?'#0F2A1A':'#2A0A0A'; tb.style.borderColor = ok?'var(--ep)':'var(--dette)';}
+  // update preview
+  PLAN_KEYS.forEach(key=>{
+    const pi = document.getElementById('pct-input-'+key);
+    const pv = document.getElementById('preview-'+key);
+    if(pi && pv) pv.textContent = fmt((parseInt(pi.value)||0)/100*1000000)+' FCFA';
+  });
+}
+
+async function saveParametres(){
+  let total = 0;
+  const newPcts = {};
+  PLAN_KEYS.forEach(k=>{
+    const v = parseInt(document.getElementById('pct-input-'+k)?.value)||0;
+    newPcts[k] = v/100;
+    total += v;
+  });
+  if(total !== 100){ toast('Le total doit être égal à 100%','error'); return; }
+  if(!state.parametres) state.parametres = {};
+  PLAN_KEYS.forEach(k => state.parametres[k] = newPcts[k]);
+  // Update sidebar nav labels
+  updateNavLabels();
+  schedSave();
+  toast('Paramètres enregistrés ✓');
+  renderParametres();
+}
+
+function resetParametres(){
+  if(!state.parametres) state.parametres = {};
+  PLAN_KEYS.forEach(k => { state.parametres[k] = DEFAULT_PCTS[k]; });
+  updateNavLabels();
+  schedSave();
+  toast('Réinitialisé aux valeurs par défaut');
+  renderParametres();
+}
+
+function updateNavLabels(){
+  const labels = {don:'Plan Don', epargne:'Plan Épargne', invest:'Plan Invest.', dette:'Dettes', conso:'Consommation'};
+  PLAN_KEYS.forEach(k=>{
+    const el = document.querySelector(`.nav-item[data-page="${k}"]`);
+    if(el) el.innerHTML = `<span class="icon">${PC[k].icon}</span>${labels[k]} (${Math.round(getPct(k)*100)}%)`;
+  });
 }
 
 // ══════════════════════════════════════════════════

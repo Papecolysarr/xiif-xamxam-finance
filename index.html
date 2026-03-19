@@ -7,6 +7,10 @@
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
 
 <!-- ══ FIREBASE CONFIG — REMPLACE CES VALEURS ══ -->
+<script>
+  // fbReady promise — resolves when Firebase module finishes loading
+  window._fbReady = new Promise(res => { window._fbResolve = res; });
+</script>
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
   import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged, updateProfile }
@@ -16,41 +20,38 @@
 
   // ⬇️ COLLE ICI TA CONFIG FIREBASE (étape 4)
   const firebaseConfig = {
-    apiKey: "// Import the functions you need from the SDKs you need
-import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
-// TODO: Add SDKs for Firebase products that you want to use
-// https://firebase.google.com/docs/web/setup#available-libraries
-
-// Your web app's Firebase configuration
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
-const firebaseConfig = {
-  apiKey: "AIzaSyAPw7tRUftioT_Jap0iupmeSH-jsJdBp5w",
+     apiKey: "AIzaSyAPw7tRUftioT_Jap0iupmeSH-jsJdBp5w",
   authDomain: "xiif-xamxam.firebaseapp.com",
   projectId: "xiif-xamxam",
   storageBucket: "xiif-xamxam.firebasestorage.app",
   messagingSenderId: "518564223931",
   appId: "1:518564223931:web:0881991192a0cc0003429e",
   measurementId: "G-55W6N6SYBB"
-};
-
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const analytics = getAnalytics(app);",
-    authDomain: "REMPLACE.firebaseapp.com",
-    projectId: "REMPLACE_PAR_TON_PROJECT_ID",
-    storageBucket: "REMPLACE.appspot.com",
-    messagingSenderId: "REMPLACE",
-    appId: "REMPLACE_PAR_TON_APP_ID"
   };
 
-  const app   = initializeApp(firebaseConfig);
-  const auth  = getAuth(app);
-  const db    = getFirestore(app);
+  const app  = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+  const db   = getFirestore(app);
 
-  // ── expose globals pour le code non-module ──
+  // expose globals
   window._fb = { auth, db, createUserWithEmailAndPassword, signInWithEmailAndPassword,
                  signOut, onAuthStateChanged, updateProfile, doc, setDoc, getDoc, onSnapshot };
+
+  // signal ready
+  window._fbResolve();
+
+  // auth state listener runs directly from module (reliable)
+  onAuthStateChanged(auth, user => {
+    if(user){
+      window._currentUser = user;
+      if(typeof window._onUserReady === 'function') window._onUserReady(user);
+    } else {
+      window._currentUser = null;
+      document.getElementById('loading-screen').style.display='none';
+      document.getElementById('auth-screen').style.display='flex';
+      document.getElementById('app-screen').style.display='none';
+    }
+  });
 </script>
 
 <style>
@@ -543,22 +544,11 @@ function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(
 // ══════════════════════════════════════════════════
 // FIREBASE AUTH
 // ══════════════════════════════════════════════════
-function waitFB(cb, tries=0){
-  if(window._fb){ cb(window._fb); }
-  else if(tries<30){ setTimeout(()=>waitFB(cb,tries+1),200); }
-  else { showScreen('auth'); }
-}
-
-waitFB(({auth, onAuthStateChanged})=>{
-  onAuthStateChanged(auth, user=>{
-    if(user){
-      currentUser=user;
-      loadUserData(user.uid);
-    } else {
-      showScreen('auth');
-    }
-  });
-});
+// _onUserReady is called by the Firebase module's onAuthStateChanged
+window._onUserReady = function(user) {
+  currentUser = user;
+  loadUserData(user.uid);
+};
 
 function showScreen(s){
   document.getElementById('loading-screen').style.display='none';
@@ -569,14 +559,14 @@ function showScreen(s){
 }
 
 async function doLogin(){
-  if(!window._fb){showErr("Firebase non chargé, recharge la page");return;}
-  const {auth, signInWithEmailAndPassword}=window._fb;
   const email=v("login-email"), pw=v("login-password");
   if(!email){showErr("Saisis ton adresse email");return;}
   if(!pw){showErr("Saisis ton mot de passe");return;}
   const btn=document.querySelector("#form-login .btn");
-  if(btn){btn.textContent="Connexionu2026";btn.disabled=true;}
+  if(btn){btn.textContent="Connexion…";btn.disabled=true;}
   try{
+    await window._fbReady;
+    const {auth, signInWithEmailAndPassword}=window._fb;
     await signInWithEmailAndPassword(auth,email,pw);
     hideErr();
   } catch(e){
@@ -586,16 +576,15 @@ async function doLogin(){
 }
 
 async function doRegister(){
-  if(!window._fb){showErr('Firebase non chargé, recharge la page');return;}
-  const {auth, createUserWithEmailAndPassword, updateProfile}=window._fb;
   const name=v('reg-name')||'Utilisateur', email=v('reg-email'), pw=v('reg-password');
   if(!email){showErr('Saisis ton adresse email');return;}
   if(!pw){showErr('Saisis un mot de passe');return;}
   if(pw.length<6){showErr('Mot de passe : 6 caractères minimum');return;}
-  // Disable button to prevent double-click
   const btn=document.querySelector('#form-register .btn');
   if(btn){btn.textContent='Création…';btn.disabled=true;}
   try{
+    await window._fbReady;
+    const {auth, createUserWithEmailAndPassword, updateProfile}=window._fb;
     const cred=await createUserWithEmailAndPassword(auth,email,pw);
     await updateProfile(cred.user,{displayName:name});
     hideErr();
@@ -606,6 +595,7 @@ async function doRegister(){
 }
 
 async function doLogout(){
+  await window._fbReady;
   const {auth,signOut}=window._fb;
   await signOut(auth);
   state=null; currentUser=null;
@@ -632,6 +622,7 @@ function switchTab(t){
 // FIRESTORE LOAD / SAVE
 // ══════════════════════════════════════════════════
 async function loadUserData(uid){
+  await window._fbReady;
   const {db, doc, getDoc}=window._fb;
   try{
     const snap=await getDoc(doc(db,'users',uid));
@@ -659,6 +650,7 @@ function setSyncing(on){
 async function persistState(){
   if(!currentUser||!state) return;
   setSyncing(true);
+  await window._fbReady;
   const {db,doc,setDoc}=window._fb;
   try{
     await setDoc(doc(db,'users',currentUser.uid), JSON.parse(JSON.stringify(state)));

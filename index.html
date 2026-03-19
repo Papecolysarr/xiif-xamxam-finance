@@ -569,25 +569,40 @@ function showScreen(s){
 }
 
 async function doLogin(){
+  if(!window._fb){showErr("Firebase non chargé, recharge la page");return;}
   const {auth, signInWithEmailAndPassword}=window._fb;
-  const email=v('login-email'), pw=v('login-password');
-  if(!email||!pw){showErr('Remplis tous les champs');return;}
+  const email=v("login-email"), pw=v("login-password");
+  if(!email){showErr("Saisis ton adresse email");return;}
+  if(!pw){showErr("Saisis ton mot de passe");return;}
+  const btn=document.querySelector("#form-login .btn");
+  if(btn){btn.textContent="Connexionu2026";btn.disabled=true;}
   try{
     await signInWithEmailAndPassword(auth,email,pw);
     hideErr();
-  } catch(e){ showErr(fmtErr(e.code)); }
+  } catch(e){
+    showErr(fmtErr(e.code));
+    if(btn){btn.textContent="Se connecter";btn.disabled=false;}
+  }
 }
 
 async function doRegister(){
+  if(!window._fb){showErr('Firebase non chargé, recharge la page');return;}
   const {auth, createUserWithEmailAndPassword, updateProfile}=window._fb;
-  const name=v('reg-name'), email=v('reg-email'), pw=v('reg-password');
-  if(!name||!email||!pw){showErr('Remplis tous les champs');return;}
+  const name=v('reg-name')||'Utilisateur', email=v('reg-email'), pw=v('reg-password');
+  if(!email){showErr('Saisis ton adresse email');return;}
+  if(!pw){showErr('Saisis un mot de passe');return;}
   if(pw.length<6){showErr('Mot de passe : 6 caractères minimum');return;}
+  // Disable button to prevent double-click
+  const btn=document.querySelector('#form-register .btn');
+  if(btn){btn.textContent='Création…';btn.disabled=true;}
   try{
     const cred=await createUserWithEmailAndPassword(auth,email,pw);
     await updateProfile(cred.user,{displayName:name});
     hideErr();
-  } catch(e){ showErr(fmtErr(e.code)); }
+  } catch(e){
+    showErr(fmtErr(e.code));
+    if(btn){btn.textContent='Créer mon compte';btn.disabled=false;}
+  }
 }
 
 async function doLogout(){

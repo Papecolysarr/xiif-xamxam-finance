@@ -1035,18 +1035,17 @@ function rDettes(){
         <div class="prog" style="background:var(--s1);height:7px;"><div class="progt" style="width:${pp}%;background:${pp>=100?'var(--g)':'var(--r)'};"></div></div>
       </div>
       ${pp>=100?'<div class="tsm fb tg mt3" style="text-align:center;">✅ Dette soldée !</div>':`<button class="btn bg bsm mt3" style="width:100%;justify-content:center;" onclick="oPaie('${d.id}')">💸 Enregistrer paiement</button>`}
-      '+(d.hist&&d.hist.length>0?
-        '<div style="margin-top:10px;border-top:1px solid var(--s2);padding-top:10px;">'+
-          '<div class="txs tmu mb3">Historique des paiements</div>'+
-          d.hist.slice(-3).reverse().map(h=>
-            '<div class="flex jb" style="font-size:12px;padding:3px 0;border-bottom:1px solid var(--s1);">'+
-              '<span style="color:var(--s6);">'+h.date+'</span>'+
-              '<span style="font-weight:700;color:var(--g);">-'+f(h.amount)+' FCFA</span>'+
-            '</div>'
-          ).join('')+
-          (d.hist.length>3?'<div class="txs tmu mt2">'+(d.hist.length-3)+' paiement(s) plus ancien(s)…</div>':'')+
-        '</div>':''
-      )+'
+      ${(d.hist&&d.hist.length>0)?
+        `<div style="margin-top:10px;border-top:1px solid var(--s2);padding-top:10px;">
+          <div class="txs tmu mb3">Historique des paiements</div>
+          ${d.hist.slice(-3).reverse().map(h=>`
+            <div class="flex jb" style="font-size:12px;padding:3px 0;border-bottom:1px solid var(--s1);">
+              <span style="color:var(--s6);">${h.date}</span>
+              <span style="font-weight:700;color:var(--g);">-${f(h.amount)} FCFA</span>
+            </div>`).join('')}
+          ${d.hist.length>3?`<div class="txs tmu mt2">${d.hist.length-3} paiement(s) plus ancien(s)…</div>`:''}
+        </div>`:''
+      }
     </div>`;
   }).join('');
   el.innerHTML=sum+`<div class="dgrid">${cards}</div>`;

@@ -705,13 +705,32 @@ async function ldData(uid){
     S=sn.exists()?sn.data():dS();
     if(!S.par)S.par={};
     while(S.mois.length<7)S.mois.push(dM());
-    // migrate old items format (bp/dep vs budgetPrevu/depense)
-    S.mois.forEach(m=>PK.forEach(k=>{
-      (m.items[k]||[]).forEach(it=>{
-        if(it.budgetPrevu!==undefined&&it.bp===undefined){it.bp=it.budgetPrevu;delete it.budgetPrevu;}
-        if(it.depense!==undefined&&it.dep===undefined){it.dep=it.depense;delete it.depense;}
+    // ── MIGRATION : compatibilité entre versions ──
+    S.mois.forEach(m=>{
+      // Items: budgetPrevu→bp, depense→dep
+      PK.forEach(k=>{
+        if(!m.items[k]) m.items[k]=[];
+        m.items[k].forEach(it=>{
+          if(it.budgetPrevu!==undefined&&it.bp===undefined){it.bp=it.budgetPrevu;}
+          if(it.depense!==undefined&&it.dep===undefined){it.dep=it.depense;}
+          if(it.bp===undefined) it.bp=0;
+          if(it.dep===undefined) it.dep=0;
+        });
       });
-    }));
+      // Dettes: assure champs obligatoires
+      if(!m.dettes) m.dettes=[];
+      m.dettes.forEach(d=>{
+        if(d.paye===undefined) d.paye=0;
+        if(d.total===undefined) d.total=0;
+        if(!d.hist) d.hist=[];
+        if(!d.type) d.type='argent';
+      });
+      // Revenus et dépenses
+      if(!m.revenus) m.revenus=[];
+      if(!m.depenses) m.depenses=[];
+    });
+    // Persist migration silently
+    persist();
     const ini=(cu.displayName||cu.email||'?').split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
     document.getElementById('uav').textContent=ini;
     document.getElementById('unm').textContent=cu.displayName||cu.email.split('@')[0];
